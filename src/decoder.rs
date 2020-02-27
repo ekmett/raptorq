@@ -61,6 +61,12 @@ impl Decoder {
         }
     }
 
+    pub fn get_progress(&self) -> (usize,usize) {
+        ( self.blocks.iter().filter(|block|block.is_some()).count(),
+          self.blocks.len()
+        )
+    }
+
     pub fn decode(&mut self, packet: EncodingPacket) -> Option<Vec<u8>> {
         let block_number = packet.payload_id.source_block_number() as usize;
         if self.blocks[block_number].is_none() {
