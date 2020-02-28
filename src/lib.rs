@@ -31,6 +31,7 @@ pub use crate::decoder::SourceBlockDecoder;
 #[cfg(not(feature = "python"))]
 pub use crate::encoder::Encoder;
 pub use crate::encoder::EncoderBuilder;
+pub use crate::encoder::EncodingPlan;
 pub use crate::encoder::SourceBlockEncoder;
 pub use crate::encoder::SourceBlockEncodingPlan;
 #[cfg(feature = "python")]

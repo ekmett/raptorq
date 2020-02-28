@@ -20,6 +20,92 @@ use serde::{Deserialize, Serialize};
 
 pub const SPARSE_MATRIX_THRESHOLD: u32 = 250;
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EncodingPlan {
+  config: ObjectTransmissionInformation,
+  kt: u32,
+  kl: u32,
+  ks: u32,
+  zl: u32,
+  zs: u32,
+  kl_plan: Option<SourceBlockEncodingPlan>,
+  ks_plan: Option<SourceBlockEncodingPlan>
+}
+
+impl EncodingPlan {
+    pub fn new(config: ObjectTransmissionInformation) -> EncodingPlan {
+        let kt = (config.transfer_length() as f64 / config.symbol_size() as f64).ceil() as u32;
+        let (kl, ks, zl, zs) = partition(kt, config.source_blocks());
+        let plan = |z,k|
+            if z > 0 {
+                Some(SourceBlockEncodingPlan::generate(k as u16))
+            } else {
+                None
+            };
+        EncodingPlan {
+            config,
+            kt,
+            kl, ks, zl, zs,
+            kl_plan: plan(zl,kl),
+            ks_plan: plan(zs,ks),
+        }
+    }
+
+    pub fn with_defaults(len: u64, maximum_transmission_unit: u16) -> EncodingPlan {
+        let config = ObjectTransmissionInformation::with_defaults(
+            len,
+            maximum_transmission_unit,
+        );
+
+        EncodingPlan::new(config)
+    }
+
+    pub fn num_blocks(&self) -> u32 { self.zl + self.zs }
+    pub fn get_block<F: Fn(u64,u64) -> Vec<u8>>(
+        &self,
+        mut i: u32,
+        data_source: F
+    ) -> SourceBlockEncoder {
+        let ss = self.config.symbol_size() as u64;
+        let large_offset = self.kl as u64 * ss;
+        if i < self.zl {
+            let data = data_source(i as u64 * large_offset, large_offset);
+            return SourceBlockEncoder::with_encoding_plan2(
+                i as u8,
+                &self.config,
+                &data,
+                self.kl_plan.as_ref().expect("plan"),
+            );
+        }
+        let base = self.zl as u64 * large_offset;
+        let small_offset = self.ks as u64 * ss;
+        i -= self.zl;
+        if i < self.zs {
+            let len = self.config.transfer_length();
+            let data_index = base + i as u64 * small_offset;
+            if data_index + small_offset <= len {
+                let data = data_source(data_index, small_offset);
+                return SourceBlockEncoder::with_encoding_plan2(
+                    i as u8,
+                    &self.config,
+                    &data,
+                    self.ks_plan.as_ref().expect("plan"),
+                );
+            } else {
+                let mut padded = data_source(data_index, len-data_index);
+                padded.extend(vec![
+                    0;
+                    self.kt as usize * ss as usize - len as usize
+                ]);
+                return SourceBlockEncoder::new2(i as u8, &self.config, &padded);
+            }
+        } else {
+          panic!("illegal block");
+        }
+    }
+}
+
+
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EncoderBuilder {
     decoder_memory_requirement: u64,
