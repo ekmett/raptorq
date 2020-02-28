@@ -70,7 +70,7 @@ impl Decoder {
     pub fn decode(&mut self, packet: EncodingPacket) -> Option<Vec<u8>> {
         let block_number = packet.payload_id.source_block_number() as usize;
         if self.blocks[block_number].is_none() {
-            self.blocks[block_number] = self.block_decoders[block_number].decode(vec![packet]);
+            self.blocks[block_number] = Some(self.block_decoders[block_number].decode(vec![packet])?);
         }
         for block in self.blocks.iter() {
             if block.is_none() {
